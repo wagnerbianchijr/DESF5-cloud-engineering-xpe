@@ -1,0 +1,22 @@
+# Local Terraform state and downloaded providers
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+crash.log
+crash.*.log
+
+# Locally generated build artefacts
+**/.build/
+*.zip
+
+# Local variable files containing project IDs and secrets
+terraform.tfvars
+*.auto.tfvars
+
+# Service account keys (do not commit)
+*.json
+!data/*.json
+!data/*.ndjson
+
+# macOS metadata
+.DS_Store

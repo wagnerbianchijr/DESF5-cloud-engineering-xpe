@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 640" font-family="Inter, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f2a44"/>
+    </marker>
+    <style>
+      .box { fill: #ffffff; stroke: #1f2a44; stroke-width: 2; rx: 10; ry: 10; }
+      .gcp { fill: #e8f0fe; stroke: #1a73e8; }
+      .iam { fill: #fff4e5; stroke: #f29900; }
+      .bq  { fill: #e6f4ea; stroke: #1e8e3e; }
+      .gcs { fill: #fce8e6; stroke: #d93025; }
+      .fn  { fill: #f3e8fd; stroke: #8430ce; }
+      .title { font-size: 18px; font-weight: 700; fill: #1f2a44; }
+      .label { font-size: 13px; fill: #1f2a44; }
+      .small { font-size: 11px; fill: #5f6368; }
+      .edge  { stroke: #1f2a44; stroke-width: 1.8; fill: none; }
+    </style>
+  </defs>
+
+  <text x="40" y="38" class="title">Desafio Final - GCP Log Pipeline (Terraform)</text>
+  <text x="40" y="58" class="small">Region: us-central1 | Free Tier guardrails | Provisioned end to end with Terraform</text>
+
+  <!-- Source applications -->
+  <rect x="40"  y="90" width="180" height="90" class="box"/>
+  <text x="130" y="120" text-anchor="middle" class="label">Applications</text>
+  <text x="130" y="140" text-anchor="middle" class="small">emit NDJSON logs</text>
+  <text x="130" y="158" text-anchor="middle" class="small">(gsutil / SDK upload)</text>
+
+  <!-- Cloud Storage bucket -->
+  <rect x="290" y="90" width="220" height="120" class="box gcs"/>
+  <text x="400" y="118" text-anchor="middle" class="label">Cloud Storage</text>
+  <text x="400" y="136" text-anchor="middle" class="small">bucket: desafio-final-logs-xxxx</text>
+  <text x="400" y="154" text-anchor="middle" class="small">STANDARD, uniform IAM</text>
+  <text x="400" y="172" text-anchor="middle" class="small">Lifecycle: 30d NEARLINE, 365d delete</text>
+  <text x="400" y="190" text-anchor="middle" class="small">Public access: enforced denial</text>
+
+  <!-- Eventarc -->
+  <rect x="580" y="90" width="160" height="90" class="box gcp"/>
+  <text x="660" y="120" text-anchor="middle" class="label">Eventarc</text>
+  <text x="660" y="140" text-anchor="middle" class="small">google.cloud.storage</text>
+  <text x="660" y="158" text-anchor="middle" class="small">.object.v1.finalized</text>
+
+  <!-- Cloud Function -->
+  <rect x="810" y="90" width="240" height="120" class="box fn"/>
+  <text x="930" y="118" text-anchor="middle" class="label">Cloud Function (Gen 2)</text>
+  <text x="930" y="136" text-anchor="middle" class="small">runtime: python312</text>
+  <text x="930" y="154" text-anchor="middle" class="small">entry: load_to_bigquery</text>
+  <text x="930" y="172" text-anchor="middle" class="small">runs as sa-loader</text>
+  <text x="930" y="190" text-anchor="middle" class="small">load NDJSON -&gt; BigQuery</text>
+
+  <!-- BigQuery -->
+  <rect x="580" y="260" width="470" height="150" class="box bq"/>
+  <text x="815" y="290" text-anchor="middle" class="label">BigQuery</text>
+  <text x="815" y="310" text-anchor="middle" class="small">dataset: desafio_final_logs (us-central1)</text>
+  <text x="815" y="328" text-anchor="middle" class="small">table: application_logs</text>
+  <text x="815" y="346" text-anchor="middle" class="small">partition: DAY(event_timestamp) | cluster: severity, service</text>
+  <text x="815" y="364" text-anchor="middle" class="small">require_partition_filter = true</text>
+  <text x="815" y="382" text-anchor="middle" class="small">default table expiration: 365 days</text>
+
+  <!-- IAM panel -->
+  <rect x="40" y="260" width="500" height="320" class="box iam"/>
+  <text x="290" y="290" text-anchor="middle" class="label">IAM</text>
+
+  <rect x="60" y="310" width="220" height="120" class="box"/>
+  <text x="170" y="332" text-anchor="middle" class="label">sa-loader</text>
+  <text x="170" y="352" text-anchor="middle" class="small">roles/storage.objectViewer (bucket)</text>
+  <text x="170" y="370" text-anchor="middle" class="small">roles/bigquery.dataEditor (dataset)</text>
+  <text x="170" y="388" text-anchor="middle" class="small">roles/bigquery.jobUser (project)</text>
+  <text x="170" y="406" text-anchor="middle" class="small">roles/eventarc.eventReceiver</text>
+  <text x="170" y="424" text-anchor="middle" class="small">roles/run.invoker</text>
+
+  <rect x="300" y="310" width="220" height="120" class="box"/>
+  <text x="410" y="332" text-anchor="middle" class="label">sa-analyst</text>
+  <text x="410" y="352" text-anchor="middle" class="small">custom: LogReadOnlyAnalyst</text>
+  <text x="410" y="370" text-anchor="middle" class="small">storage.objects.get/list</text>
+  <text x="410" y="388" text-anchor="middle" class="small">bigquery.tables.getData</text>
+  <text x="410" y="406" text-anchor="middle" class="small">bigquery.jobs.create</text>
+  <text x="410" y="424" text-anchor="middle" class="small">(no write, no delete)</text>
+
+  <rect x="60" y="450" width="460" height="115" class="box"/>
+  <text x="290" y="472" text-anchor="middle" class="label">Google-managed agents</text>
+  <text x="290" y="492" text-anchor="middle" class="small">service-{project}@gs-project-accounts -&gt; pubsub.publisher</text>
+  <text x="290" y="510" text-anchor="middle" class="small">Eventarc service agent created on API enablement</text>
+  <text x="290" y="528" text-anchor="middle" class="small">Cloud Build / Run service agents created automatically</text>
+  <text x="290" y="546" text-anchor="middle" class="small">All grants emitted by iam.tf, scoped to resource where possible</text>
+
+  <!-- Edges -->
+  <path d="M220 135 L290 135" class="edge" marker-end="url(#arrow)"/>
+  <path d="M510 135 L580 135" class="edge" marker-end="url(#arrow)"/>
+  <path d="M740 135 L810 135" class="edge" marker-end="url(#arrow)"/>
+  <path d="M930 210 L930 250 L820 250 L820 260" class="edge" marker-end="url(#arrow)"/>
+  <path d="M410 430 L600 430 L600 410" class="edge" marker-end="url(#arrow)"/>
+  <path d="M170 430 L170 440" class="edge"/>
+  <path d="M170 440 L800 440 L800 410" class="edge" marker-end="url(#arrow)"/>
+
+  <text x="554" y="608" text-anchor="middle" class="small">Free Tier limits respected: 5 GB-month GCS storage, 1 TiB BigQuery queries, 10 GB BigQuery storage.</text>
+</svg>
