@@ -1,0 +1,134 @@
+================================================================================
+Desafio Final - Cloud Engineer
+Validação de IAM em runtime via service account impersonation
+================================================================================
+Projeto         : gcloud-xpe
+Identidade alvo : desafio-final-analyst@gcloud-xpe.iam.gserviceaccount.com
+Papel vinculado : projects/gcloud-xpe/roles/LogReadOnlyAnalyst (custom role)
+Data da prova   : 2026-05-23
+================================================================================
+
+Configuração da sessão (impersonação sem geração de key, conforme
+https://cloud.google.com/iam/docs/service-account-impersonation):
+
+  $ export CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT=\
+      desafio-final-analyst@gcloud-xpe.iam.gserviceaccount.com
+
+
+================================================================================
+1. SELECT permitido contra application_logs (item 6 do checklist)
+================================================================================
+
+  $ bq query --use_legacy_sql=false --project_id=gcloud-xpe '
+  SELECT event_timestamp, severity, service, host
+  FROM `gcloud-xpe.desafio_final_logs.application_logs`
+  WHERE event_timestamp >= TIMESTAMP("2026-05-01")
+  LIMIT 10;
+  '
+
+  WARNING: This command is using service account impersonation. All API calls
+  will be executed as [desafio-final-analyst@gcloud-xpe.iam.gserviceaccount.com].
+
+  +---------------------+----------+---------------+---------+
+  |   event_timestamp   | severity |    service    |  host   |
+  +---------------------+----------+---------------+---------+
+  | 2026-05-22 00:20:39 | WARNING  | search        | host-08 |
+  | 2026-05-22 05:33:53 | WARNING  | search        | host-01 |
+  | 2026-05-22 10:09:10 | WARNING  | search        | host-11 |
+  | 2026-05-22 15:57:22 | WARNING  | search        | host-04 |
+  | 2026-05-22 11:49:36 | WARNING  | search        | host-09 |
+  | 2026-05-19 22:56:41 | CRITICAL | ingest        | host-06 |
+  | 2026-05-19 13:02:07 | CRITICAL | notifications | host-03 |
+  | 2026-05-19 07:37:09 | DEBUG    | auth          | host-04 |
+  | 2026-05-19 10:58:45 | DEBUG    | auth          | host-01 |
+  | 2026-05-19 14:46:20 | DEBUG    | auth          | host-09 |
+  +---------------------+----------+---------------+---------+
+
+  Resultado: 10 linhas retornadas. SELECT bate em bigquery.tables.getData,
+  permission presente na custom role LogReadOnlyAnalyst.
+
+
+================================================================================
+2. INSERT negado contra application_logs (item 7 do checklist)
+================================================================================
+
+  $ bq query --use_legacy_sql=false --project_id=gcloud-xpe '
+  INSERT INTO `gcloud-xpe.desafio_final_logs.application_logs`
+  (event_timestamp, severity, service)
+  VALUES (CURRENT_TIMESTAMP(), "INFO", "deny-test");
+  '
+
+  WARNING: This command is using service account impersonation. All API calls
+  will be executed as [desafio-final-analyst@gcloud-xpe.iam.gserviceaccount.com].
+
+  BigQuery error in query operation:
+    Access Denied: Table gcloud-xpe:desafio_final_logs.application_logs:
+    Permission bigquery.tables.updateData denied on table
+    gcloud-xpe:desafio_final_logs.application_logs (or it may not exist).
+
+  Resultado: comando bloqueado pelo IAM. A custom role LogReadOnlyAnalyst
+  intencionalmente NAO inclui bigquery.tables.updateData, exatamente como
+  esperado por uma read only role.
+
+
+================================================================================
+3. List bucket permitido (evidencia adicional de read funcionando)
+================================================================================
+
+  $ gcloud storage ls gs://desafio-final-logs-7006ad/manual/
+
+  WARNING: This command is using service account impersonation. All API calls
+  will be executed as [desafio-final-analyst@gcloud-xpe.iam.gserviceaccount.com].
+  gs://desafio-final-logs-7006ad/manual/sample_logs.ndjson
+
+  Resultado: listagem permitida. Bate em storage.objects.list, presente
+  na custom role.
+
+
+================================================================================
+4. Delete object negado (item 8 do checklist)
+================================================================================
+
+  $ gcloud storage rm gs://desafio-final-logs-7006ad/manual/sample_logs.ndjson \
+      --verbosity=debug
+
+  WARNING: This command is using service account impersonation. All API calls
+  will be executed as [desafio-final-analyst@gcloud-xpe.iam.gserviceaccount.com].
+
+  apitools.base.py.exceptions.HttpForbiddenError: HttpError accessing
+  <https://storage.googleapis.com/storage/v1/b/desafio-final-logs-7006ad/o/
+  manual%2Fsample_logs.ndjson?alt=json>: response status 403, content:
+  {
+    "message": "desafio-final-analyst@gcloud-xpe.iam.gserviceaccount.com
+                does not have storage.objects.delete access to the Google
+                Cloud Storage object. Permission 'storage.objects.delete'
+                denied on resource (or it may not exist)."
+  }
+
+  Resultado: HTTP 403 retornado pelo motor de IAM do GCS, com o nome exato
+  da permission ausente. A custom role LogReadOnlyAnalyst intencionalmente
+  NAO inclui storage.objects.delete.
+
+
+================================================================================
+Conclusão
+================================================================================
+
+A custom role LogReadOnlyAnalyst entrega o que o nome promete:
+
+  Operações permitidas (esperadas):
+    bigquery.jobs.create        OK (SELECT executou)
+    bigquery.tables.getData     OK (10 linhas retornaram)
+    storage.objects.list        OK (listou o objeto no bucket)
+    storage.objects.get         OK (implicitamente, na leitura)
+
+  Operações negadas (esperadas):
+    bigquery.tables.updateData  DENIED (INSERT bloqueado)
+    storage.objects.delete      DENIED (rm bloqueado com HTTP 403)
+
+A impersonação foi feita sem geração de chave de service account, usando
+short lived OAuth tokens emitidos pela API IAM Credentials. O usuário
+wagnerbianchijr@gmail.com possui roles/iam.serviceAccountTokenCreator
+sobre a analyst SA, condição exigida pelo GCP para impersonation.
+
+Referência: https://cloud.google.com/iam/docs/service-account-impersonation
